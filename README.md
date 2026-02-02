@@ -1,8 +1,27 @@
-# BFMC - Computer Project
+# RAVEN - Computer ("Mission Control")
 
-The project contains all the provided code that will run on the PC, and it's made of 4 parts:
-- carsAndSemaphoresStreamSIM: The simulated stream. Sends random, simulated data about the semaphores and the cars on the track, just as our servers at the Bosch location.
-- trafficCommunicationServer: The simulated server of the challenge. The car can get from this server the IP of the localization device and send to it information during the run (Speed, position, rotation and encountered obstacles.)
+![Raven Computer](https://img.shields.io/badge/Component-Computer-grey) ![Status](https://img.shields.io/badge/Status-Active-success)
 
-## The documentation is available in more details here:
-[Documentation](https://boschfuturemobility.com/brain/)
+The **Computer** repository hosts the dashboard and pit-station tools used for monitoring the vehicle during operation. It also includes the V2X communication simulation servers.
+
+## 📚 Documentation
+> **Full Technical Documentation:** [bosch-future-mobility-challenge-documentation.readthedocs-hosted.com](https://bosch-future-mobility-challenge-documentation.readthedocs-hosted.com)
+
+---
+
+## 🚀 Key Features
+
+| Task ID | Feature Name | Description |
+| :--- | :--- | :--- |
+| **[007a]** | **Telemetry Dashboard** | Web-based interface to visualize speed, steering, and camera feeds. |
+| **[V2X]** | **Traffic Comm Server** | Simulates the competition server for traffic light status and localization. |
+| **[Log]** | **Data Analysis** | Tools for parsing and plotting run logs. |
+
+## 🛠️ Usage
+
+### Starting the Dashboard
+```bash
+cd src/dashboard
+python3 app.py
+```
+Access the dashboard at `http://localhost:5000`.
