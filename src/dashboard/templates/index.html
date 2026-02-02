@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RAVEN Telemetry</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { font-family: 'Courier New', monospace; background: #111; color: #0f0; padding: 20px; }
+        .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .card { border: 1px solid #0f0; padding: 20px; border-radius: 5px; }
+        h1 { border-bottom: 2px solid #0f0; padding-bottom: 10px; }
+        .value { font-size: 2em; font-weight: bold; }
+        button { background: #333; color: #fff; border: 1px solid #fff; padding: 10px 20px; cursor: pointer; font-size: 1.2em; }
+        button.stop { background: #d00; border-color: #f00; color: #fff; }
+        button:hover { opacity: 0.8; }
+    </style>
+</head>
+<body>
+    <h1>RAVEN-GP MISSION CONTROL</h1>
+    
+    <div class="dashboard">
+        <div class="card">
+            <h3>SPEED</h3>
+            <div id="speed" class="value">0.0 cm/s</div>
+        </div>
+        <div class="card">
+            <h3>STEERING</h3>
+            <div id="steer" class="value">0.0 deg</div>
+        </div>
+        <div class="card">
+            <h3>BATTERY</h3>
+            <div id="battery" class="value">100%</div>
+        </div>
+        <div class="card">
+            <h3>STATE</h3>
+            <div id="state" class="value">IDLE</div>
+        </div>
+    </div>
+
+    <br>
+    <div class="controls">
+        <button onclick="sendCommand('start')">START MISSION</button>
+        <button class="stop" onclick="sendCommand('emergency_stop')">EMERGENCY STOP</button>
+    </div>
+
+    <script type="text/javascript">
+        var socket = io();
+        
+        socket.on('connect', function() {
+            console.log("Connected to RAVEN Core");
+        });
+
+        socket.on('telemetry_update', function(data) {
+            document.getElementById('speed').innerText = data.speed.toFixed(1) + " cm/s";
+            document.getElementById('steer').innerText = data.steer.toFixed(1) + " deg";
+            document.getElementById('battery').innerText = data.battery + "%";
+            document.getElementById('state').innerText = data.state;
+        });
+
+        function sendCommand(cmd) {
+            socket.emit('command', cmd);
+        }
+    </script>
+</body>
+</html>
