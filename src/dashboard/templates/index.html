@@ -2,64 +2,187 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>RAVEN Telemetry</title>
+    <title>RAVEN Telemetry & Control</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
-        body { font-family: 'Courier New', monospace; background: #111; color: #0f0; padding: 20px; }
-        .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .card { border: 1px solid #0f0; padding: 20px; border-radius: 5px; }
-        h1 { border-bottom: 2px solid #0f0; padding-bottom: 10px; }
-        .value { font-size: 2em; font-weight: bold; }
-        button { background: #333; color: #fff; border: 1px solid #fff; padding: 10px 20px; cursor: pointer; font-size: 1.2em; }
-        button.stop { background: #d00; border-color: #f00; color: #fff; }
-        button:hover { opacity: 0.8; }
+        body { font-family: 'Courier New', monospace; background: #111; color: #0f0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; max-width: 800px; margin-bottom: 20px; }
+        .card { border: 1px solid #0f0; padding: 20px; border-radius: 5px; text-align: center; }
+        h1 { border-bottom: 2px solid #0f0; padding-bottom: 10px; width: 100%; text-align: center; }
+        .value { font-size: 2em; font-weight: bold; margin-top: 10px; }
+        .status-bar { width: 100%; max-width: 800px; display: flex; justify-content: space-between; margin-bottom: 20px; border: 1px solid #333; padding: 10px; }
+        .controls-info { color: #888; margin-top: 10px; font-size: 0.9em; text-align: center; }
+        
+        button { background: #333; color: #fff; border: 1px solid #fff; padding: 15px 30px; cursor: pointer; font-size: 1.2em; border-radius: 5px; margin: 0 10px; transition: all 0.2s; }
+        button:hover { background: #555; }
+        button:active { transform: scale(0.98); }
+        button.start { border-color: #0f0; color: #0f0; }
+        button.start:hover { background: #003300; }
+        button.stop { border-color: #f00; color: #f00; }
+        button.stop:hover { background: #330000; }
+
+        .connection-status { padding: 5px 10px; border-radius: 3px; }
+        .connected { background: #004400; color: #fff; }
+        .disconnected { background: #440000; color: #fff; }
+
+        .control-panel { display: flex; justify-content: center; margin-top: 20px; }
     </style>
 </head>
 <body>
     <h1>RAVEN-GP MISSION CONTROL</h1>
     
+    <div class="status-bar">
+        <div>System: <span id="sys-status" class="connection-status disconnected">DISCONNECTED</span></div>
+        <div>Mode: <span id="driving-mode">MANUAL Remote</span></div>
+    </div>
+
     <div class="dashboard">
         <div class="card">
-            <h3>SPEED</h3>
-            <div id="speed" class="value">0.0 cm/s</div>
+            <h3>SPEED (cmd)</h3>
+            <div id="speed" class="value">0</div>
         </div>
         <div class="card">
-            <h3>STEERING</h3>
-            <div id="steer" class="value">0.0 deg</div>
+            <h3>STEERING (cmd)</h3>
+            <div id="steer" class="value">0</div>
         </div>
         <div class="card">
             <h3>BATTERY</h3>
-            <div id="battery" class="value">100%</div>
+            <div id="battery" class="value">--%</div>
         </div>
         <div class="card">
-            <h3>STATE</h3>
-            <div id="state" class="value">IDLE</div>
+            <h3>IMU</h3>
+            <div id="imu" class="value">--</div>
         </div>
     </div>
 
-    <br>
-    <div class="controls">
-        <button onclick="sendCommand('start')">START MISSION</button>
-        <button class="stop" onclick="sendCommand('emergency_stop')">EMERGENCY STOP</button>
+    <div class="control-panel">
+        <button class="start" onclick="sendSystemCommand(30)">START SYSTEM</button>
+        <button class="stop" onclick="sendSystemCommand(0)">STOP SYSTEM</button>
+    </div>
+
+    <div class="controls-info">
+        <p>CONTROLS: [W] Speed Up | [S] Slow Down/Reverse | [A] Left | [D] Right | [SPACE] Brake</p>
     </div>
 
     <script type="text/javascript">
-        var socket = io();
+        // Connect directly to the Brain process (port 5005)
+        // If Brain is on a different machine, replace localhost with its IP
+        const BRAIN_URL = 'http://' + window.location.hostname + ':5005';
+        console.log("Connecting to Brain at:", BRAIN_URL);
+
+        var socket = io(BRAIN_URL);
         
-        socket.on('connect', function() {
-            console.log("Connected to RAVEN Core");
-        });
+        // State
+        var currentSpeed = 0.0;
+        var currentSteer = 0.0;
+        var maxSpeed = 30.0; // cm/s
+        var maxSteer = 23.0; // degrees
+        var speedStep = 2.0;
+        var steerStep = 3.0;
+        var isSystemActive = false;
 
-        socket.on('telemetry_update', function(data) {
-            document.getElementById('speed').innerText = data.speed.toFixed(1) + " cm/s";
-            document.getElementById('steer').innerText = data.steer.toFixed(1) + " deg";
-            document.getElementById('battery').innerText = data.battery + "%";
-            document.getElementById('state').innerText = data.state;
-        });
-
-        function sendCommand(cmd) {
-            socket.emit('command', cmd);
+        // Visual Updates
+        function updateDisplay() {
+            document.getElementById('speed').innerText = currentSpeed.toFixed(1);
+            document.getElementById('steer').innerText = currentSteer.toFixed(1);
         }
+
+        // Socket Events
+        socket.on('connect', function() {
+            console.log("Connected to RAVEN Brain");
+            const statusEl = document.getElementById('sys-status');
+            statusEl.innerText = "ONLINE";
+            statusEl.className = "connection-status connected";
+            
+            // Request initial state/session
+            socket.emit('message', JSON.stringify({ "Name": "SessionAccess", "Value": "Request" }));
+        });
+
+        socket.on('disconnect', function() {
+            console.log("Disconnected from RAVEN Brain");
+            const statusEl = document.getElementById('sys-status');
+            statusEl.innerText = "OFFLINE";
+            statusEl.className = "connection-status disconnected";
+        });
+
+        socket.on('BatteryLvl', function(data) {
+            document.getElementById('battery').innerText = data.value + "%";
+        });
+
+        // Command Sending
+        function sendSystemCommand(mode) {
+            // Mode 30 = Start (Klem 30), Mode 0 = Stop (Klem 0)
+            console.log("Sending System Command: Klem", mode);
+            socket.emit('message', JSON.stringify({ "Name": "Klem", "Value": mode.toString() }));
+            
+            if (mode === 30) {
+                isSystemActive = true;
+                // Enable sensors
+                socket.emit('message', JSON.stringify({ "Name": "ToggleBatteryLvl", "Value": "True" }));
+                socket.emit('message', JSON.stringify({ "Name": "ToggleImuData", "Value": "True" }));
+            } else {
+                isSystemActive = false;
+                currentSpeed = 0;
+                currentSteer = 0;
+                updateDisplay();
+            }
+        }
+
+        function emitControl() {
+            if (!isSystemActive) return;
+
+            // Send Speed
+            socket.emit('message', JSON.stringify({ 
+                "Name": "SpeedMotor", 
+                "Value": Math.round(currentSpeed).toString() 
+            }));
+
+            // Send Steer
+            socket.emit('message', JSON.stringify({ 
+                "Name": "SteerMotor", 
+                "Value": Math.round(currentSteer).toString() 
+            }));
+        }
+
+        // Keyboard Input
+        document.addEventListener('keydown', (event) => {
+            if (!isSystemActive && event.key !== ' ') return; // Allow space to brake always? No, only if active.
+
+            switch(event.key.toLowerCase()) {
+                case 'w':
+                case 'arrowup':
+                    currentSpeed = Math.min(currentSpeed + speedStep, maxSpeed);
+                    break;
+                case 's':
+                case 'arrowdown':
+                    currentSpeed = Math.max(currentSpeed - speedStep, -maxSpeed);
+                    break;
+                case 'a':
+                case 'arrowleft':
+                    currentSteer = Math.max(currentSteer - steerStep, -maxSteer);
+                    break;
+                case 'd':
+                case 'arrowright':
+                    currentSteer = Math.min(currentSteer + steerStep, maxSteer);
+                    break;
+                case ' ':
+                    currentSpeed = 0;
+                    break;
+                default:
+                    return; // Quit if not a control key
+            }
+            updateDisplay();
+            emitControl();
+        });
+
+        document.addEventListener('keyup', (event) => {
+            // Optional: Auto-center steering or coasting logic could go here
+            // For now, we keep the value until changed (Latch mode)
+            // Or we could implement "hold to move" logic. 
+            // Stick to latch for now as it's easier to control with latency.
+        });
+
     </script>
 </body>
 </html>
+
